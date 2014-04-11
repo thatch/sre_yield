@@ -128,6 +128,40 @@ class YieldTest(unittest.TestCase):
         self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'a', re.U)
         self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'a', re.L)
 
+    def testAnchorsCaret(self):
+        parsed = sre_yield.Values('^[ab]')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testAnchorsA(self):
+        parsed = sre_yield.Values('\\A[ab]')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testAnchorsMultiCaret(self):
+        parsed = sre_yield.Values('^(\\b^([ab]))')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testParseErrorInMiddle(self):
+        self.assertRaises(sre_yield.ParseError, sre_yield.Values, '\\Ba')
+        self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'a\\bb')
+        self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'a^b')
+        self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'a$b')
+
+    def testAnchorsDollar(self):
+        parsed = sre_yield.Values('[ab]$')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testAnchorsZ(self):
+        parsed = sre_yield.Values('[ab]\\Z')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testAnchorsCombined(self):
+        parsed = sre_yield.Values('^[ab]$')
+        self.assertEquals(['a', 'b'], list(parsed))
+
+    def testAnchorsBoundary(self):
+        # TODO this could theoretically be supported, but it's easier to walk
+        # than decide at parse time.
+        self.assertRaises(sre_yield.ParseError, sre_yield.Values, 'ab\\b')
 
 if __name__ == '__main__':
     unittest.main()

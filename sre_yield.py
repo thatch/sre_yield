@@ -234,9 +234,30 @@ class RegexMembershipSequence(WrappedSequence):
             if not isinstance(arguments, tuple):
                 arguments = (arguments,)
             if matcher in self.backends:
-                return self.backends[matcher](*arguments)
+                # A bit of a hack to support zero-width leading anchors.
+                if matcher == 'at':
+                    if arguments[0] not in (sre_constants.AT_BOUNDARY, sre_constants.AT_BEGINNING, sre_constants.AT_BEGINNING_STRING):
+                        self.found_nonzero_width = True
+                elif matcher != 'subpattern':
+                    self.found_nonzero_width = True
+                rv = self.backends[matcher](*arguments)
+                # More hack to support zero-width trailing anchors.
+                if matcher == 'at':
+                    if arguments[0] in (sre_constants.AT_END, sre_constants.AT_END_STRING):
+                        self.found_end_anchor = True
+                    elif self.found_end_anchor:
+                        raise ParseError('Anchor after end anchor', arguments)
+                elif self.found_end_anchor and matcher != 'subpattern':
+                    raise ParseError('Found end anchor')
+
+                return rv
         # No idea what to do here
         return ['<<<%s>>>' % repr(parsed)]
+
+    def at(self, anchor_type):
+        if self.found_nonzero_width and anchor_type not in (sre_constants.AT_END, sre_constants.AT_END_STRING):
+            raise ParseError('Anchor %r found after nonzero width' % (anchor_type,))
+        return ['']
 
     def __init__(self, pattern, flags=0, charset=CHARSET, max_count=None):
         # If the RE module cannot compile it, we give up quickly
@@ -265,7 +286,7 @@ class RegexMembershipSequence(WrappedSequence):
             sre_constants.BRANCH: self.branch_values,
             sre_constants.MIN_REPEAT: self.max_repeat_values,
             sre_constants.MAX_REPEAT: self.max_repeat_values,
-            sre_constants.AT: self.empty_list,
+            sre_constants.AT: self.at,
             sre_constants.ASSERT: self.empty_list,
             sre_constants.ASSERT_NOT: self.empty_list,
             sre_constants.ANY:
@@ -275,6 +296,8 @@ class RegexMembershipSequence(WrappedSequence):
             sre_constants.CATEGORY: self.category,
         }
         # Now build a generator that knows all possible patterns
+        self.found_nonzero_width = False
+        self.found_end_anchor = False
         self.raw = self.sub_values(sre_parse.parse(pattern, flags))
         # Configure this class instance to know about that result
         self.length = self.raw.__len__()

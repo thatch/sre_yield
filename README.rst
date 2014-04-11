@@ -176,5 +176,7 @@ other exceptions:
 
   .. code-block:: pycon
 
-      >>> list(sre_yield.Values('foo$'))
-      []
+      >>> list(sre_yield.Values('foo\\b'))
+      Traceback (most recent call last):
+      ...
+      ParseError: Anchor 'at_boundary' found after nonzero width
