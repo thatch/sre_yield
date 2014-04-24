@@ -386,6 +386,20 @@ class RegexMembershipSequence(WrappedSequence):
         self.has_groupref = True
         return ReadCaptureGroup(n)
 
+    def literal(self, y):
+        # TODO: this only solves the problem for a little while; at some point
+        # we'll try to append a chr(128-255) with a unichr, and hit a snag.
+        if y > 255:
+            return unichr(y)
+        return chr(y)
+
+    def range(self, l, h):
+        # TODO: see above
+        if l < 256 and h < 256:
+            return [chr(c) for c in xrange(l, h+1)]
+        return [unichr(c) for c in xrange(l, h+1)]
+
+
     def get_item(self, i, d=None):
         """Typically only pass i.  d is an internal detail, for consistency with other classes.
 
@@ -449,8 +463,8 @@ class RegexMembershipSequence(WrappedSequence):
 
         # Configure the parser backends
         self.backends = {
-            sre_constants.LITERAL: lambda y: [chr(y)],
-            sre_constants.RANGE: lambda l, h: [chr(c) for c in xrange(l, h+1)],
+            sre_constants.LITERAL: self.literal,
+            sre_constants.RANGE: self.range,
             sre_constants.SUBPATTERN: self.maybe_save,
             sre_constants.BRANCH: self.branch_values,
             sre_constants.MIN_REPEAT: self.max_repeat_values,
