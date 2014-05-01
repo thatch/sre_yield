@@ -54,6 +54,19 @@ class UnicodeTest(unittest.TestCase):
                     print "Extra", ord(i), unicodedata.category(i)
             self.assertEquals(sorted(matching), sorted(parsed[:]))
 
+    def testMixedRange(self):
+        parsed = sre_yield.AllStrings('[\d ]', flags=re.U, want_unicode=True,
+                                      charset=sre_yield.UNICODE_BMP_CHARSET)
+        l = list(parsed)
+        print l
+        self.assertGreater(len(l), 11)
+        self.assertEquals(u'0', l[0])
+        self.assertEquals(u'9', l[9])
+        self.assertEquals(u'\u0660', l[10])
+        # ...
+        self.assertEquals(u'\uff19', l[-2])
+        self.assertEquals(u' ', l[-1])
+
 if __name__ == '__main__':
     unittest.main()
 
