@@ -19,7 +19,7 @@ import unittest
 from sre_yield import cachingseq
 
 
-class CachingFuncSequenceTest(unittest.TestCase):
+class TestCachingFuncSequence(unittest.TestCase):
     def testLimits(self):
         c = cachingseq.CachingFuncSequence(lambda i: i, 10)
         self.assertEquals(9, c[9])

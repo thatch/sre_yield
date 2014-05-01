@@ -22,7 +22,7 @@ import unittest
 from sre_yield.fastdivmod import divmod_iter_chunking, divmod_iter_basic, powersum
 
 
-class FastDivmodTest(unittest.TestCase):
+class TestFastDivmod(unittest.TestCase):
     def test_divmod_iter_basic(self):
         v = divmod_iter_basic(1234, 10)
         self.assertEquals([4, 3, 2, 1], list(v))

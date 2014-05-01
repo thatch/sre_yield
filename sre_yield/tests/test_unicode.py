@@ -21,7 +21,8 @@ import unicodedata
 
 import sre_yield
 
-class UnicodeTest(unittest.TestCase):
+
+class TestUnicode(unittest.TestCase):
     def testUnicodeCharset(self):
         v = sre_yield.AllStrings('.', charset=sre_yield.UNICODE_BMP_CHARSET,
                                  want_unicode=True)
@@ -66,6 +67,7 @@ class UnicodeTest(unittest.TestCase):
         # ...
         self.assertEquals(u'\uff19', l[-2])
         self.assertEquals(u' ', l[-1])
+
 
 if __name__ == '__main__':
     unittest.main()

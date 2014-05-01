@@ -20,7 +20,7 @@ import unittest
 import sre_yield
 
 
-class SlowYieldTest(unittest.TestCase):
+class TestSlowYield(unittest.TestCase):
     """Test that regular expressions give the right lists."""
 
     def testDotStarCase(self):

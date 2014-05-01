@@ -21,7 +21,7 @@ import unittest
 import sre_yield
 
 
-class YieldTest(unittest.TestCase):
+class TestYield(unittest.TestCase):
     """Test that regular expressions give the right lists."""
 
     def testSimpleCases(self):
