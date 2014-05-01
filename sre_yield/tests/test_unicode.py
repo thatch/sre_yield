@@ -21,6 +21,7 @@ import unicodedata
 
 import sre_yield
 
+ALL_UNICODE = map(unichr, xrange(65536))
 
 class TestUnicode(unittest.TestCase):
     def testUnicodeCharset(self):
@@ -31,29 +32,6 @@ class TestUnicode(unittest.TestCase):
                                  charset=sre_yield.UNICODE_BMP_CHARSET,
                                  want_unicode=True)
         self.assertEquals(65536, len(v)) # With \n
-
-    def testCategories(self):
-        self.maxDiff = None
-        cat_chars = 'wWdDsS'
-        all_unicode = map(unichr, xrange(65536))
-        for c in cat_chars:
-            r = re.compile('\\' + c, re.U)
-            print "Checking", c
-            matching = [i for i in all_unicode if r.match(i)]
-            self.assertGreater(len(matching), 5)
-            parsed = sre_yield.AllStrings('\\' + c, flags=re.U,
-                                          want_unicode=True,
-                                          charset=sre_yield.UNICODE_BMP_CHARSET)
-            p = set(parsed[:])
-            m = set(matching)
-            for i in m:
-                if i not in p:
-                    print "Missing", ord(i), unicodedata.category(i)
-
-            for i in p:
-                if i not in m:
-                    print "Extra", ord(i), unicodedata.category(i)
-            self.assertEquals(sorted(matching), sorted(parsed[:]))
 
     def testMixedRange(self):
         parsed = sre_yield.AllStrings('[\d ]', flags=re.U, want_unicode=True,
@@ -69,6 +47,33 @@ class TestUnicode(unittest.TestCase):
         self.assertEquals(u' ', l[-1])
 
 
+def test_categories():
+    """Ensure that `re` and `sre_yield` agree on the contents of a category."""
+    cat_chars = 'wWdDsS'
+    for c in cat_chars:
+        yield category_runner, c
+
+
+def category_runner(cat_char):
+    r = re.compile('\\' + cat_char, re.U)
+    print "Checking", cat_char
+    matching = [i for i in ALL_UNICODE if r.match(i)]
+    assert len(matching) > 5
+    parsed = sre_yield.AllStrings('\\' + cat_char, flags=re.U,
+                                  want_unicode=True,
+                                  charset=sre_yield.UNICODE_BMP_CHARSET)
+    p = set(parsed[:])
+    m = set(matching)
+    for i in m:
+        if i not in p:
+            print "Missing", ord(i), unicodedata.category(i)
+
+    for i in p:
+        if i not in m:
+            print "Extra", ord(i), unicodedata.category(i)
+
+    assert sorted(matching) == sorted(parsed[:])
+
+
 if __name__ == '__main__':
     unittest.main()
-
