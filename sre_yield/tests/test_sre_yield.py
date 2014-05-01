@@ -111,6 +111,7 @@ class YieldTest(unittest.TestCase):
         self.assertEquals(parsed[99], '99')
 
     def testCategories(self):
+        self.maxDiff = None
         cat_chars = 'wWdDsS'
         all_ascii = map(chr, range(256))
         for c in cat_chars:
@@ -132,7 +133,6 @@ class YieldTest(unittest.TestCase):
 
     def testParseErrors(self):
         self.assertRaises(sre_yield.ParseError, sre_yield.AllStrings, 'a', re.I)
-        self.assertRaises(sre_yield.ParseError, sre_yield.AllStrings, 'a', re.U)
         self.assertRaises(sre_yield.ParseError, sre_yield.AllStrings, 'a', re.L)
 
     def testSavingGroups(self):

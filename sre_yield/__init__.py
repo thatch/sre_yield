@@ -41,21 +41,31 @@ from sre_yield import fastdivmod
 _RE_METACHARS = r'$^{}*+\\'
 _ESCAPED_METACHAR = r'\\[' + _RE_METACHARS + r']'
 ESCAPED_METACHAR_RE = re.compile(_ESCAPED_METACHAR)
-CHARSET = [chr(c) for c in xrange(256)]
+ASCII_CHARSET = [chr(c) for c in xrange(256)]
+UNICODE_BMP_CHARSET = [unichr(c) for c in xrange(65536)]
+# Note: will be the same as BMP on narrow builds; consider this support
+# incomplete as we _really_ don't want to deal with surrogates on narrow builds
+# (and, it breaks Jython).
+UNICODE_ALL_CHARSET = [unichr(c) for c in xrange(sys.maxunicode+1)]
 
 WORD = string.letters + string.digits + '_'
 
-def Not(chars):
-    return ''.join(sorted(set(CHARSET) - set(chars)))
+NEGATIVE_CATEGORIES = {
+    sre_constants.CATEGORY_NOT_WORD: sre_constants.CATEGORY_WORD,
+    sre_constants.CATEGORY_NOT_DIGIT: sre_constants.CATEGORY_DIGIT,
+    sre_constants.CATEGORY_NOT_SPACE: sre_constants.CATEGORY_SPACE,
+}
 
-
-CATEGORIES = {
+ASCII_CATEGORIES = {
     sre_constants.CATEGORY_WORD: WORD,
-    sre_constants.CATEGORY_NOT_WORD: Not(WORD),
     sre_constants.CATEGORY_DIGIT: string.digits,
-    sre_constants.CATEGORY_NOT_DIGIT: Not(string.digits),
     sre_constants.CATEGORY_SPACE: string.whitespace,
-    sre_constants.CATEGORY_NOT_SPACE: Not(string.whitespace),
+}
+
+UNICODE_CATEGORIES = {
+    sre_constants.CATEGORY_WORD: ('Lm', 'Lo', 'Ll', 'Lu', 'Lt', 'Nd', 'No', 'Nl', '_'),
+    sre_constants.CATEGORY_DIGIT: ('Nd',),
+    sre_constants.CATEGORY_SPACE: ('Zs', 'Zl', 'Zp', unicode(string.whitespace), u'\x1c\x1d\x1e\x1f\x85'),
 }
 
 # This constant varies between builds of Python; this is the lower value.
@@ -372,15 +382,43 @@ class RegexMembershipSequence(WrappedSequence):
         # Special case which distinguishes branch from charset operator
         if items and items[0][0] == sre_constants.NEGATE:
             items = self.branch_values(None, items[1:])
-            return [item for item in self.charset if item not in items]
+            return [item for item in self.dot_charset if item not in items]
         return self.branch_values(None, items)
 
     def not_literal(self, y):
         return self.in_values(((sre_constants.NEGATE,),
                               (sre_constants.LITERAL, y),))
 
-    def category(self, y):
-        return CATEGORIES[y]
+    def compute_cat(self, positive_cat, negated):
+        from sre_yield import unistring
+        buf = []
+        for unicode_category_name in UNICODE_CATEGORIES[positive_cat]:
+            if len(unicode_category_name) != 2:
+                buf.append(unicode_category_name)
+            else:
+                buf.append(getattr(unistring, unicode_category_name))
+        rv = u''.join(buf)
+        if negated:
+            return u''.join(c for c in self.charset if c not in rv)
+        else:
+            return u''.join(c for c in self.charset if c in rv)
+
+    def category(self, cat):
+        positive_cat = NEGATIVE_CATEGORIES.get(cat, cat)
+        buf = []
+        if self.want_unicode and self.flags & re.UNICODE:
+            if cat not in self._category_cache:
+                self._category_cache[cat] = (
+                    self.compute_cat(positive_cat, cat != positive_cat))
+            return self._category_cache[cat]
+        else:
+            rv = ASCII_CATEGORIES[positive_cat]
+            if cat != positive_cat:
+                # Negated
+                return ''.join(c for c in self.charset if c not in rv)
+            else:
+                # Restrict to charset.
+                return ''.join(c for c in self.charset if c in rv)
 
     def groupref(self, n):
         self.has_groupref = True
@@ -424,21 +462,29 @@ class RegexMembershipSequence(WrappedSequence):
             rv = SaveCaptureGroup(rv, group)
         return rv
 
-    def __init__(self, pattern, flags=0, charset=CHARSET, max_count=None):
+    def __init__(self, pattern, flags=0, charset=None, max_count=None, want_unicode=False):
         # If the RE module cannot compile it, we give up quickly
         self.matcher = re.compile(r'(?:%s)\Z' % pattern, flags)
-        if not flags & re.DOTALL:
-            charset = ''.join(c for c in charset if c != '\n')
+        if charset is None:
+            charset = ASCII_CHARSET
+
         self.charset = charset
+        if not flags & re.DOTALL:
+            self.dot_charset = ''.join(c for c in charset if c != '\n')
+        else:
+            self.dot_charset = charset
 
         self.named_group_lookup = self.matcher.groupindex
 
         if flags & re.IGNORECASE:
             raise ParseError('Flag "i" not supported. https://code.google.com/p/sre-yield/issues/detail?id=7')
-        elif flags & re.UNICODE:
-            raise ParseError('Flag "u" not supported. https://code.google.com/p/sre-yield/issues/detail?id=8')
         elif flags & re.LOCALE:
             raise ParseError('Flag "l" not supported. https://code.google.com/p/sre-yield/issues/detail?id=8')
+
+        self.flags = flags
+        self.want_unicode = want_unicode
+        self.chr_type = chr_type = unichr if self.want_unicode else chr
+        self._category_cache = {}
 
         if max_count is None:
             self.max_count = MAX_REPEAT_COUNT
@@ -449,8 +495,8 @@ class RegexMembershipSequence(WrappedSequence):
 
         # Configure the parser backends
         self.backends = {
-            sre_constants.LITERAL: lambda y: [chr(y)],
-            sre_constants.RANGE: lambda l, h: [chr(c) for c in xrange(l, h+1)],
+            sre_constants.LITERAL: lambda y: [chr_type(y)],
+            sre_constants.RANGE: lambda l, h: [chr_type(c) for c in xrange(l, h+1)],
             sre_constants.SUBPATTERN: self.maybe_save,
             sre_constants.BRANCH: self.branch_values,
             sre_constants.MIN_REPEAT: self.max_repeat_values,
@@ -489,9 +535,10 @@ class RegexMembershipSequenceMatches(RegexMembershipSequence):
         return Match(s, d, self.named_group_lookup)
 
 
-def AllStrings(regex, flags=0, charset=CHARSET, max_count=None):
+def AllStrings(regex, flags=0, charset=None, max_count=None, want_unicode=False):
     """Constructs an object that will generate all matching strings."""
-    return RegexMembershipSequence(regex, flags, charset, max_count=max_count)
+    return RegexMembershipSequence(
+        regex, flags, charset, max_count=max_count, want_unicode=want_unicode)
 
 Values = AllStrings
 
@@ -524,9 +571,10 @@ class Match(object):
         raise NotImplementedError()
 
 
-def AllMatches(regex, flags=0, charset=CHARSET, max_count=None):
+def AllMatches(regex, flags=0, charset=None, max_count=None, want_unicode=False):
     """Constructs an object that will generate all matching strings."""
-    return RegexMembershipSequenceMatches(regex, flags, charset, max_count=max_count)
+    return RegexMembershipSequenceMatches(
+        regex, flags, charset, max_count=max_count, want_unicode=want_unicode)
 
 
 def main(argv=None):
