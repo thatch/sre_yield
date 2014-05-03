@@ -21,21 +21,26 @@ import unicodedata
 
 import sre_yield
 
-ALL_UNICODE = map(unichr, xrange(65536))
+if sre_yield.CAN_REPRESENT_BARE_SURROGATES:
+    ALL_UNICODE = map(unichr, xrange(65536))
+else:
+    ALL_UNICODE = [unichr(c) for c in xrange(65536) if c < 0xd800 or c >= 0xdc00]
 
 class TestUnicode(unittest.TestCase):
     def testUnicodeCharset(self):
-        v = sre_yield.AllStrings('.', charset=sre_yield.UNICODE_BMP_CHARSET,
-                                 want_unicode=True)
-        self.assertEquals(65535, len(v)) # No \n
-        v = sre_yield.AllStrings('.', flags=re.DOTALL,
-                                 charset=sre_yield.UNICODE_BMP_CHARSET,
-                                 want_unicode=True)
-        self.assertEquals(65536, len(v)) # With \n
+        v = sre_yield.AllStrings(u'.', flags=re.U)
+        if sre_yield.CAN_REPRESENT_BARE_SURROGATES:
+            self.assertEquals(0xffff, len(v)) # No \n
+        else:
+            self.assertEquals(0xffff-0x400, len(v)) # No \n or surrogates
+        v = sre_yield.AllStrings(u'.', flags=re.DOTALL | re.U)
+        if sre_yield.CAN_REPRESENT_BARE_SURROGATES:
+            self.assertEquals(0x10000, len(v)) # With \n
+        else:
+            self.assertEquals(0x10000-0x400, len(v))
 
     def testMixedRange(self):
-        parsed = sre_yield.AllStrings('[\d ]', flags=re.U, want_unicode=True,
-                                      charset=sre_yield.UNICODE_BMP_CHARSET)
+        parsed = sre_yield.AllStrings('[\d ]', flags=re.U)
         l = list(parsed)
         print l
         self.assertGreater(len(l), 11)
@@ -59,9 +64,7 @@ def category_runner(cat_char):
     print "Checking", cat_char
     matching = [i for i in ALL_UNICODE if r.match(i)]
     assert len(matching) > 5
-    parsed = sre_yield.AllStrings('\\' + cat_char, flags=re.U,
-                                  want_unicode=True,
-                                  charset=sre_yield.UNICODE_BMP_CHARSET)
+    parsed = sre_yield.AllStrings('\\' + cat_char, flags=re.U)
     p = set(parsed[:])
     m = set(matching)
     for i in m:
