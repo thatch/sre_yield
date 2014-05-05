@@ -46,9 +46,9 @@ class TestUnicode(unittest.TestCase):
         self.assertGreater(len(l), 11)
         self.assertEquals(u'0', l[0])
         self.assertEquals(u'9', l[9])
-        self.assertEquals(u'\u0660', l[10])
+        self.assertEquals(u'\u0660', l[10]) # ARABIC-INDIC DIGIT ZERO
         # ...
-        self.assertEquals(u'\uff19', l[-2])
+        self.assertEquals(u'\uff19', l[-2]) # FULLWIDTH DIGIT NINE
         self.assertEquals(u' ', l[-1])
 
 
