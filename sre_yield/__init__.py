@@ -365,8 +365,18 @@ class RegexMembershipSequence(WrappedSequence):
     def max_repeat_values(self, min_count, max_count, items):
         """Sequential expansion of the count to be combinatorics."""
         max_count = min(max_count, self.max_count)
+        child = self.sub_values(items)
+
+        if self.specific_count:
+            # Expand this as an alternation, but only within
+            # min_count/max_count.
+            counts = [i for i in self.specific_count
+                      if min_count <= i <= max_count]
+            return ConcatenatedSequence(
+                *[RepetitiveSequence(child, i, i) for i in counts])
+
         return RepetitiveSequence(
-            self.sub_values(items), min_count, max_count)
+            child, min_count, max_count)
 
     def in_values(self, items):
         # Special case which distinguishes branch from charset operator
@@ -438,7 +448,8 @@ class RegexMembershipSequence(WrappedSequence):
             rv = SaveCaptureGroup(rv, group)
         return rv
 
-    def __init__(self, pattern, flags=0, charset=CHARSET, max_count=None):
+    def __init__(self, pattern, flags=0, charset=CHARSET, max_count=None,
+                 specific_count=None):
         # If the RE module cannot compile it, we give up quickly
         self.matcher = re.compile(r'(?:%s)\Z' % pattern, flags)
         if not flags & re.DOTALL:
@@ -458,6 +469,7 @@ class RegexMembershipSequence(WrappedSequence):
             self.max_count = MAX_REPEAT_COUNT
         else:
             self.max_count = max_count
+        self.specific_count = specific_count
 
         self.has_groupref = False
 
@@ -503,9 +515,12 @@ class RegexMembershipSequenceMatches(RegexMembershipSequence):
         return Match(s, d, self.named_group_lookup)
 
 
-def AllStrings(regex, flags=0, charset=CHARSET, max_count=None):
+def AllStrings(regex, flags=0, charset=CHARSET, max_count=None,
+               specific_count=None):
     """Constructs an object that will generate all matching strings."""
-    return RegexMembershipSequence(regex, flags, charset, max_count=max_count)
+    return RegexMembershipSequence(
+        regex, flags, charset, max_count=max_count,
+        specific_count=specific_count)
 
 Values = AllStrings
 
@@ -538,9 +553,12 @@ class Match(object):
         raise NotImplementedError()
 
 
-def AllMatches(regex, flags=0, charset=CHARSET, max_count=None):
+def AllMatches(regex, flags=0, charset=CHARSET, max_count=None,
+               specific_count=None):
     """Constructs an object that will generate all matching strings."""
-    return RegexMembershipSequenceMatches(regex, flags, charset, max_count=max_count)
+    return RegexMembershipSequenceMatches(
+        regex, flags, charset, max_count=max_count,
+        specific_count=specific_count)
 
 
 def main(argv=None):
