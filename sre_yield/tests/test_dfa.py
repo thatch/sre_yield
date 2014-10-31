@@ -55,13 +55,25 @@ class TestPrune(TestCase):
     def test_prune_dotstar(self):
         d = dfa.dot_star_dfa()
         dfa.knockout(d, 'foo')
-        print d.to_regex()
         d.recursive_prune()
         import re
         print d.to_regex()
         r = re.compile(d.to_regex() + '$')
         self.assertTrue(r.match('a' * 20))
         self.assertFalse(r.match('foo-bar'))
+
+    def test_prune2(self):
+        d = dfa.dot_star_dfa()
+        dfa.knockout(d, 'aa')
+        dfa.knockout(d, 'bb')
+        import re
+        d.recursive_prune()
+        print d.to_regex()
+        r = re.compile(d.to_regex() + '$')
+        self.assertTrue(r.match('c' * 20))
+        self.assertFalse(r.match('a' * 20))
+        self.assertFalse(r.match('b' * 20))
+
 
 class TestAdd(TestCase):
     def test_simple(self):

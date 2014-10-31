@@ -61,6 +61,13 @@ class DFA(object):
             elif k is not self:
                 k.recursive_prune()
 
+    def walk(self, s):
+        buf = [self]
+        for c in map(ord, s):
+            if not buf[-1]: return
+            buf.append(buf[-1].tab[c])
+        return buf
+
 
 def esc(i):
     if ord('a') <= i <= ord('z') or \
@@ -131,6 +138,7 @@ def knockout(root_dfa, s):
             d.tab[c] = d.copy()
         d = d.tab[c]
     d.accepting = False
+    d.tab = [None] * 256
 
 def add(root_dfa, s):
     d = root_dfa
