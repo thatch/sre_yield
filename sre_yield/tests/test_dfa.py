@@ -52,6 +52,17 @@ class TestPrune(TestCase):
         d1.recursive_prune()
         self.assertEqual(d2.tab[1], None)
 
+    def test_prune_dotstar(self):
+        d = dfa.dot_star_dfa()
+        dfa.knockout(d, 'foo')
+        print d.to_regex()
+        d.recursive_prune()
+        import re
+        print d.to_regex()
+        r = re.compile(d.to_regex() + '$')
+        self.assertTrue(r.match('a' * 20))
+        self.assertFalse(r.match('foo-bar'))
+
 class TestAdd(TestCase):
     def test_simple(self):
         d = dfa.DFA()

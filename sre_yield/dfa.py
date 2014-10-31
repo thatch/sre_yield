@@ -10,6 +10,7 @@ class DFA(object):
                 t.tab.append(t)
             else:
                 t.tab.append(i)
+        t.accepting = self.accepting
         return t
     def to_regex(self):
         grouped = self._grouped()
@@ -57,13 +58,14 @@ class DFA(object):
             if not k.reachable():
                 for i in v:
                     self.tab[i] = None
-            else:
+            elif k is not self:
                 k.recursive_prune()
 
 
 def esc(i):
     if ord('a') <= i <= ord('z') or \
-       ord('A') <= i <= ord('Z'):
+       ord('A') <= i <= ord('Z') or \
+       ord('0') <= i <= ord('9'):
         return chr(i)
     else:
         return '\\x%02x' % i
@@ -89,7 +91,7 @@ def charclass(ords):
             x.append(esc(a))
         else:
             x.append(esc(a) + '-' + esc(b))
-    return '[' + ''.join(x) + ']'
+    return '[' + prefix + ''.join(x) + ']'
 
 DOTALL_ALPHABET = list(range(256))
 DOT_ALPHABET = [i for i in range(256) if i != 10]
@@ -137,3 +139,31 @@ def add(root_dfa, s):
             d.tab[c] = DFA()
         d = d.tab[c]
     d.accepting = True
+
+def _debug_table(root, alphabet):
+    cell_width = 4
+    buf = []
+    idx = {root: 1}
+    next_idx = 2
+    queue = [root]
+    # output header
+    buf.append(' ' * (cell_width+2) + ' '.join('%*s' % (cell_width, esc(c)) for c in sorted(alphabet)))
+    while queue:
+        n = queue.pop(0)
+        t = []
+        t.append('%0*x:' % (cell_width, idx[n]))
+        for i, x in enumerate(n.tab):
+            if i in alphabet:
+                if x is None:
+                    t.append('_' * cell_width)
+                else:
+                    if x not in idx:
+                        idx[x] = next_idx
+                        next_idx += 1
+                        queue.append(x)
+                    t.append('%0*x' % (cell_width, idx[x]))
+        if n.accepting:
+            t.append('A')
+        buf.append(' '.join(t))
+
+    return '\n'.join(buf)
