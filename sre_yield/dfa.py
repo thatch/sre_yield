@@ -1,7 +1,20 @@
+"""
+Class and utility methods for operating on discrete finite automota.
+"""
+
+DOTALL_ALPHABET = list(range(256))
+DOT_ALPHABET = [i for i in range(256) if i != 10]
+
+
 class DFA(object):
+    """Represents a DFA."""
+
     def __init__(self):
         self.tab = [None] * 256
         self.accepting = False
+        self.generation = None
+
+    # TODO: break mode
     def copy(self):
         t = DFA()
         t.tab = []
@@ -12,6 +25,7 @@ class DFA(object):
                 t.tab.append(i)
         t.accepting = self.accepting
         return t
+
     def to_regex(self):
         grouped = self._grouped()
         if not grouped:
@@ -52,13 +66,15 @@ class DFA(object):
             if k.reachable():
                 return True
         return False
-                
-    def recursive_prune(self):
+
+    # TODO don't require this; do so during knockout
+    def recursive_prune(self, generation=1):
         for k, v in self._grouped().iteritems():
             if not k.reachable():
                 for i in v:
                     self.tab[i] = None
-            elif k is not self:
+            elif k is not self and k.generation != generation:
+                k.generation = generation
                 k.recursive_prune()
 
     def walk(self, s):
@@ -74,8 +90,11 @@ def esc(i):
        ord('A') <= i <= ord('Z') or \
        ord('0') <= i <= ord('9'):
         return chr(i)
+    elif i == ord('\n'):
+        return '\\n'
     else:
         return '\\x%02x' % i
+
 
 def charclass(ords):
     # assumes that they're sorted.
@@ -100,11 +119,9 @@ def charclass(ords):
             x.append(esc(a) + '-' + esc(b))
     return '[' + prefix + ''.join(x) + ']'
 
-DOTALL_ALPHABET = list(range(256))
-DOT_ALPHABET = [i for i in range(256) if i != 10]
 
 def build_dfa(alphabet, next_state=None):
-    # When alphabet is None, make it self.
+    # When next_state is missing, it's a self-repetition.
     d = DFA()
     if next_state is None:
         next_state = d
@@ -112,16 +129,19 @@ def build_dfa(alphabet, next_state=None):
         d.tab[i] = next_state
     return d
 
+
 def build_dfa_from_choices(choices):
     d = DFA()
     for c in choices:
         add(d, c)
     return d
 
+
 def dot_star_dfa(al=DOT_ALPHABET):
     d = build_dfa(al)
     d.accepting = True
     return d
+
 
 def dot_plus_dfa(al=DOT_ALPHABET):
     d2 = build_dfa(al)
@@ -129,16 +149,21 @@ def dot_plus_dfa(al=DOT_ALPHABET):
     d1 = build_dfa(al, d2)
     return d1
 
+
 def knockout(root_dfa, s):
     d = root_dfa
     for c in map(ord, s):
         if not d.tab[c]: return
         # break repetitions, more generally this could use a refcount.
+        # TODO this doesn't quite work (see failing test test_complex_knockout).
         if d.tab[c] is d:
             d.tab[c] = d.copy()
         d = d.tab[c]
     d.accepting = False
+    # TODO if this could walk back up, we wouldn't need recursive_prune in the
+    # common case.
     d.tab = [None] * 256
+
 
 def add(root_dfa, s):
     d = root_dfa
@@ -148,29 +173,55 @@ def add(root_dfa, s):
         d = d.tab[c]
     d.accepting = True
 
-def _debug_table(root, alphabet):
-    cell_width = 4
+
+def _debug_numbers(root, alphabet):
+    """
+    Gives a simplified version of the DFA suitable for tests and debugging.
+
+    root: a DFA node
+    alphabet: a sequence of ascii numbers to use as column keys.  Should not
+        have duplicates (the headers would be misaligned), and will be sorted.
+    """
     buf = []
     idx = {root: 1}
     next_idx = 2
     queue = [root]
-    # output header
-    buf.append(' ' * (cell_width+2) + ' '.join('%*s' % (cell_width, esc(c)) for c in sorted(alphabet)))
     while queue:
         n = queue.pop(0)
         t = []
-        t.append('%0*x:' % (cell_width, idx[n]))
         for i, x in enumerate(n.tab):
             if i in alphabet:
                 if x is None:
-                    t.append('_' * cell_width)
+                    t.append(x)
                 else:
                     if x not in idx:
                         idx[x] = next_idx
                         next_idx += 1
                         queue.append(x)
-                    t.append('%0*x' % (cell_width, idx[x]))
-        if n.accepting:
+                    t.append(idx[x])
+        t.append(n.accepting)
+        buf.append(tuple(t))
+    return buf
+
+
+def _debug_table(root, alphabet):
+    cell_width = 4
+    buf = []
+    # output header
+    buf.append(
+        ' ' * (cell_width+2) +
+        ' '.join('%*s' % (cell_width, esc(c))
+                 for c in sorted(set(alphabet))))
+
+    for i, row in enumerate(_debug_numbers(root, alphabet)):
+        t = []
+        t.append('%0*x:' % (cell_width, i+1))
+        for x in row[:-1]:
+            if x is None:
+                t.append('_' * cell_width)
+            else:
+                t.append('%0*x' % (cell_width, x))
+        if row[-1]:
             t.append('A')
         buf.append(' '.join(t))
 

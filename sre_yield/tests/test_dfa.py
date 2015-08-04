@@ -74,6 +74,13 @@ class TestPrune(TestCase):
         self.assertFalse(r.match('a' * 20))
         self.assertFalse(r.match('b' * 20))
 
+class TestKnockout(TestCase):
+    def test_complex_knockout(self):
+        d = dfa.dot_star_dfa(al=dfa.DOTALL_ALPHABET)
+        dfa.knockout(d, 'abc')
+        d.recursive_prune()
+        # (?:[^a]+|a(?:[^b]+|b[^c]*|)|) is wrong.  first [^a] should not have +
+        self.assertEqual('(?:[^a].*|a(?:[^b].*+|b[^c].*|)|)', d.to_regex())
 
 class TestAdd(TestCase):
     def test_simple(self):
@@ -96,7 +103,38 @@ class TestAdd(TestCase):
         dfa.add(d, 'fb')
         self.assertEqual('f(?:a|b|)', d.to_regex())
 
+    def test_add_empty(self):
+        d = dfa.dot_plus_dfa()
+        self.assertEqual(
+            [(None, 2, False),
+             (None, 2, True)],
+            dfa._debug_numbers(d, map(ord, '\na')))
+        dfa.add(d, '')
+        self.assertEqual(
+            [(None, 2, True),
+             (None, 2, True)],
+            dfa._debug_numbers(d, map(ord, '\na')))
+
+
 class TestBuild(TestCase):
     def test_choices(self):
         d = dfa.build_dfa_from_choices(('abc', 'def'))
         self.assertEqual('(?:abc|def)', d.to_regex())
+
+class TestDebugFuncs(TestCase):
+    def test_debug_numbers(self):
+        d = dfa.dot_plus_dfa()
+        keys = map(ord, '\nabc')
+        n = dfa._debug_numbers(d, keys)
+        self.assertEqual(2, len(n))
+        self.assertEqual((None, 2, 2, 2, False), n[0])
+        self.assertEqual((None, 2, 2, 2, True), n[1])
+
+    def test_debug_table(self):
+        d = dfa.dot_plus_dfa()
+        keys = map(ord, '\nabc')
+        n = dfa._debug_table(d, keys)
+        self.assertMultiLineEqual("""\
+        \\n    a    b    c
+0001: ____ 0002 0002 0002
+0002: ____ 0002 0002 0002 A""", n)
