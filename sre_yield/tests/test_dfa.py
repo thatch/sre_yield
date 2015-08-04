@@ -1,5 +1,7 @@
-from sre_yield import dfa
+import re
 from unittest import TestCase
+
+from sre_yield import dfa
 
 class TestHelpers(TestCase):
     def test_esc(self):
@@ -54,7 +56,7 @@ class TestPrune(TestCase):
 
     def test_prune_dotstar(self):
         d = dfa.dot_star_dfa()
-        dfa.knockout(d, 'foo')
+        dfa.knockout_prefix(d, 'foo')
         d.recursive_prune()
         import re
         print d.to_regex()
@@ -64,8 +66,8 @@ class TestPrune(TestCase):
 
     def test_prune2(self):
         d = dfa.dot_star_dfa()
-        dfa.knockout(d, 'aa')
-        dfa.knockout(d, 'bb')
+        dfa.knockout_prefix(d, 'aa')
+        dfa.knockout_prefix(d, 'bb')
         import re
         d.recursive_prune()
         print d.to_regex()
@@ -75,12 +77,38 @@ class TestPrune(TestCase):
         self.assertFalse(r.match('b' * 20))
 
 class TestKnockout(TestCase):
+    def test_simple_knockout(self):
+        d = dfa.dot_star_dfa(al=dfa.DOTALL_ALPHABET)
+        dfa.knockout(d, 'a')
+        d.recursive_prune()
+        self.assertEqual('(?:[^a].*|a..*|)', d.to_regex())
+
     def test_complex_knockout(self):
         d = dfa.dot_star_dfa(al=dfa.DOTALL_ALPHABET)
         dfa.knockout(d, 'abc')
         d.recursive_prune()
         # (?:[^a]+|a(?:[^b]+|b[^c]*|)|) is wrong.  first [^a] should not have +
-        self.assertEqual('(?:[^a].*|a(?:[^b].*+|b[^c].*|)|)', d.to_regex())
+        self.assertEqual('(?:[^a].*|a(?:[^b].*|b(?:[^c].*|c..*|)|)|)', d.to_regex())
+
+    def test_abxy(self):
+        # Known issue: this outputs ..* which can be written .+ if we look ahead.
+        d = dfa.dot_star_dfa(dfa.DOTALL_ALPHABET)
+        dfa.knockout(d, 'ab')
+        dfa.knockout(d, 'xy')
+
+        d.recursive_prune()
+        print dfa._debug_table(d, map(ord, 'abxy'))
+        self.assertEqual('(?:[^ax].*|a(?:[^b].*|b..*|)|x(?:[^y].*|y..*|)|)', d.to_regex())
+        c = re.compile(d.to_regex() + '$')
+
+        for first_letter in range(ord('a'), ord('z') + 1):
+            for second_letter in range(ord('a'), ord('z') + 1):
+                sample = chr(first_letter) + chr(second_letter)
+                expected = sample not in ('ab', 'xy')
+                self.assertEqual(expected, bool(c.match(sample)))
+                # If we used knockout_prefix, this is assertEqual(expected, ...
+                self.assertTrue(c.match(sample + 'a'))
+
 
 class TestAdd(TestCase):
     def test_simple(self):
@@ -92,8 +120,11 @@ class TestAdd(TestCase):
         dfa.add(d, 'fob')
         self.assertEqual('f(?:ab|o(?:b|o))', d.to_regex())
         dfa.add(d, 'food')
+        print dfa._debug_table(d, map(ord, 'fabod'))
+
         dfa.knockout(d, 'fob')
         d.recursive_prune()
+        print dfa._debug_table(d, map(ord, 'fabod'))
         self.assertEqual('f(?:ab|oo(?:d|))', d.to_regex())
 
     def test_alternation(self):

@@ -14,18 +14,32 @@ class DFA(object):
         self.accepting = False
         self.generation = None
 
-    # TODO: break mode
     def copy(self):
-        t = DFA()
-        t.tab = []
+        # postcondition: safe to modify the copy, without affecting any child nodes.
+        # self references will cause t2->t2; we want to return t1->t2 though.
+        # if there are no self references, just return t2 for simplicity.
+        t2 = DFA()
+        t2.tab = []
+        has_self = False
+
         for i in self.tab:
             if i is self:
-                t.tab.append(t)
+                t2.tab.append(t2)
+                has_self = True
             else:
-                t.tab.append(i)
-        t.accepting = self.accepting
-        return t
+                t2.tab.append(i)
 
+        # TODO verify; seems wrong
+        t2.accepting = self.accepting
+        if has_self:
+            t1 = DFA()
+            t1.tab = t2.tab[:]
+            t1.accepting = self.accepting
+            return t1
+        #print t
+        return t2
+
+    # TODO take dotall and pass to charclass.
     def to_regex(self):
         grouped = self._grouped()
         if not grouped:
@@ -98,12 +112,19 @@ def esc(i):
 
 def charclass(ords):
     # assumes that they're sorted.
+    assert ords
     if len(ords) == 1:
         return esc(ords[0])
     prefix = ''
     if len(ords) > 200:
         ords = sorted(set(range(256)) - set(ords))
         prefix = '^'
+
+    if not ords or ords == (10,):
+        return '.'
+        # TODO if we knew if it was dot or dotall...
+        #return '[' + prefix + r'\w\W]'
+
     ranges = []
     for i in ords:
         if ranges and ranges[-1][1] == i - 1:
@@ -150,12 +171,13 @@ def dot_plus_dfa(al=DOT_ALPHABET):
     return d1
 
 
-def knockout(root_dfa, s):
+def knockout_prefix(root_dfa, s):
+    # equivalent to (?!foo)
     d = root_dfa
     for c in map(ord, s):
         if not d.tab[c]: return
         # break repetitions, more generally this could use a refcount.
-        # TODO this doesn't quite work (see failing test test_complex_knockout).
+        # TODO this doesn't quite work (see failing tests test_(simple|complex)_knockout).
         if d.tab[c] is d:
             d.tab[c] = d.copy()
         d = d.tab[c]
@@ -163,6 +185,28 @@ def knockout(root_dfa, s):
     # TODO if this could walk back up, we wouldn't need recursive_prune in the
     # common case.
     d.tab = [None] * 256
+
+
+def knockout(root_dfa, s):
+    # equivalent to (?!foo$)
+    d = root_dfa
+    for c in map(ord, s):
+        if not d.tab[c]: return
+        copy = d.copy()
+        # only needed for d == root_dfa; done regardless to reduce opportunity for rare bugs.
+        d.tab = copy.tab[:]
+
+        # break repetitions, more generally this could use a refcount.
+        # TODO this doesn't quite work (see failing tests test_(simple|complex)_knockout).
+        d.tab[c] = d.tab[c].copy()
+        #print d.tab[c], copy
+        #if d.tab[c] is copy:
+        #    print 'trigger copy', chr(c)
+        #    d.tab[c] = copy.copy()
+        d = d.tab[c]
+    d.accepting = False
+    # TODO if this could walk back up after checking whether any entries in
+    # d.tab are non-None, we wouldn't need recursive_prune in the common case.
 
 
 def add(root_dfa, s):
