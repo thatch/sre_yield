@@ -171,6 +171,19 @@ def dot_plus_dfa(al=DOT_ALPHABET):
     return d1
 
 
+def dot_curly_dfa(min_count=1, max_count=2, al=DOT_ALPHABET):
+    work = build_dfa(al)
+    work.accepting = True
+    work.tab = [None] * len(work.tab)
+    for i in range(min_count, max_count):
+        work = build_dfa(al, work)
+        work.accepting = True
+    for i in range(0, min_count):
+        work = build_dfa(al, work)
+        work.accepting = False
+    return work
+
+
 def knockout_prefix(root_dfa, s):
     # equivalent to (?!foo)
     d = root_dfa

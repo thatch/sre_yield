@@ -1,4 +1,7 @@
+import itertools
+import random
 import re
+import string
 from unittest import TestCase
 
 from sre_yield import dfa
@@ -169,3 +172,31 @@ class TestDebugFuncs(TestCase):
         \\n    a    b    c
 0001: ____ 0002 0002 0002
 0002: ____ 0002 0002 0002 A""", n)
+
+class TestHelpers(TestCase):
+    def test_dot_star(self):
+        d = dfa.dot_star_dfa()
+        self.assertEqual(True, d.accepting)
+        self.assertEqual(True, d.tab[0].accepting)
+
+    def test_dot_plus(self):
+        d = dfa.dot_plus_dfa()
+        self.assertEqual(False, d.accepting)
+        self.assertEqual(True, d.tab[0].accepting)
+
+    def test_curly0(self):
+        d = dfa.dot_curly_dfa(0, 2)
+        self.assertEqual(True, d.accepting)
+        self.assertEqual(True, d.tab[0].accepting)
+        self.assertEqual(True, d.tab[0].tab[0].accepting)
+        self.assertEqual(None, d.tab[0].tab[0].tab[0])
+        self.assertEqual('(?:[^\\n](?:[^\\n]|)|)', d.to_regex())
+
+    def test_curly1(self):
+        d = dfa.dot_curly_dfa(1, 3)
+        self.assertEqual(False, d.accepting)
+        self.assertEqual(True, d.tab[0].accepting)
+        self.assertEqual(True, d.tab[0].tab[0].accepting)
+        self.assertEqual(True, d.tab[0].tab[0].tab[0].accepting)
+        self.assertEqual(None, d.tab[0].tab[0].tab[0].tab[0])
+        self.assertEqual('[^\\n](?:[^\\n](?:[^\\n]|)|)', d.to_regex())
